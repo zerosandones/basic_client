@@ -47,17 +47,18 @@
     </div>
     <div id="tab-content" style="margin-top: 0.5em;">
         <div id="headers-panel">
-            <label for="headers">Headers (JSON format):</label>
-            <textarea id="headers" name="headers" rows="5" placeholder='{"Content-Type": "application/json"}'
-                style="width: 100%;"></textarea>
+            <label>Headers:</label>
+            <div id="headers-list"></div>
+            <button id="add-header-btn" type="button">Add Header</button>
         </div>
         <div id="body-panel" style="display:none;">
             <label for="body">Body (for POST, PUT, PATCH):</label>
             <textarea id="body" name="body" rows="10" placeholder='{"key": "value"}' style="width: 100%;"></textarea>
         </div>
         <div id="params-panel" style="display:none;">
-            <label for="params">Query Parameters (JSON format):</label>
-            <textarea id="params" name="params" rows="5" placeholder='{"key": "value"}' style="width: 100%;"></textarea>
+            <label>Query Parameters:</label>
+            <div id="params-list"></div>
+            <button id="add-param-btn" type="button">Add Parameter</button>
         </div>
     </div>
 
@@ -104,22 +105,100 @@
         // Save/load requests logic
         const saveBtn = document.getElementById('save-btn');
 
+
+        // --- Headers List Logic ---
+        function getHeadersArray() {
+            const rows = Array.from(document.querySelectorAll('.header-row'));
+            return rows.map(row => ({
+                enabled: row.querySelector('.header-enabled').checked,
+                name: row.querySelector('.header-name').value,
+                value: row.querySelector('.header-value').value
+            })).filter(h => h.name);
+        }
+
+        function setHeadersArray(headersArr) {
+            const headersList = document.getElementById('headers-list');
+            headersList.innerHTML = '';
+            let arr = (headersArr && headersArr.length > 0) ? headersArr : [];
+            arr.forEach(header => addHeaderRow(header.name, header.value, header.enabled));
+            if (arr.length === 0) addHeaderRow();
+        }
+
+        function addHeaderRow(name = '', value = '', enabled = true) {
+            const headersList = document.getElementById('headers-list');
+            const row = document.createElement('div');
+            row.className = 'header-row flex-row';
+            row.innerHTML = `
+                <input type="checkbox" class="header-enabled" ${enabled ? 'checked' : ''} title="Enable/Disable" />
+                <input type="text" class="header-name" placeholder="Name" value="${name}" style="width: 7em;" />
+                <input type="text" class="header-value" placeholder="Value" value="${value}" style="width: 10em;" />
+                <button type="button" class="remove-header-btn">✕</button>
+            `;
+            row.querySelector('.remove-header-btn').onclick = () => row.remove();
+            headersList.appendChild(row);
+        }
+
+        document.getElementById('add-header-btn').onclick = () => addHeaderRow();
+
+        // --- Params List Logic ---
+        function getParamsArray() {
+            const rows = Array.from(document.querySelectorAll('.param-row'));
+            return rows.map(row => ({
+                enabled: row.querySelector('.param-enabled').checked,
+                name: row.querySelector('.param-name').value,
+                value: row.querySelector('.param-value').value
+            })).filter(p => p.name);
+        }
+
+        function setParamsArray(paramsArr) {
+            const paramsList = document.getElementById('params-list');
+            paramsList.innerHTML = '';
+            let arr = (paramsArr && paramsArr.length > 0) ? paramsArr : [];
+            arr.forEach(param => addParamRow(param.name, param.value, param.enabled));
+            if (arr.length === 0) addParamRow();
+        }
+
+        function addParamRow(name = '', value = '', enabled = true) {
+            const paramsList = document.getElementById('params-list');
+            const row = document.createElement('div');
+            row.className = 'param-row flex-row';
+            row.innerHTML = `
+                <input type="checkbox" class="param-enabled" ${enabled ? 'checked' : ''} title="Enable/Disable" />
+                <input type="text" class="param-name" placeholder="Name" value="${name}" style="width: 7em;" />
+                <input type="text" class="param-value" placeholder="Value" value="${value}" style="width: 10em;" />
+                <button type="button" class="remove-param-btn">✕</button>
+            `;
+            row.querySelector('.remove-param-btn').onclick = () => row.remove();
+            paramsList.appendChild(row);
+        }
+
+        document.getElementById('add-param-btn').onclick = () => addParamRow();
+
+        // ---
         function getRequestData() {
             return {
                 method: document.getElementById('method').value,
                 url: document.getElementById('url').value,
-                headers: document.getElementById('headers').value,
+                headers: JSON.stringify(getHeadersArray()),
                 body: document.getElementById('body').value,
-                params: document.getElementById('params').value
+                params: JSON.stringify(getParamsArray())
             };
         }
 
         function setRequestData(data) {
             document.getElementById('method').value = data.method || 'GET';
             document.getElementById('url').value = data.url || '';
-            document.getElementById('headers').value = data.headers || '';
+            try {
+                setHeadersArray(JSON.parse(data.headers || '[]'));
+            } catch {
+                setHeadersArray([]);
+            }
             document.getElementById('body').value = data.body || '';
-            document.getElementById('params').value = data.params || '';
+            try {
+                setParamsArray(JSON.parse(data.params || '[]'));
+            } catch {
+                setParamsArray([]);
+            }
         }
 
 
@@ -141,6 +220,9 @@
             if (vscodeApi) {
                 vscodeApi.postMessage({ type: 'ready' });
             }
+            // Add one empty row by default on load
+            setHeadersArray([]);
+            setParamsArray([]);
         });
 
         saveBtn.onclick = () => {
@@ -156,23 +238,23 @@
             let headers = {};
             let body = undefined;
             let params = {};
-            try {
-                headers = JSON.parse(document.getElementById('headers').value || '{}');
-            } catch (e) {
-                alert('Invalid JSON in headers');
-                return;
-            }
-            try {
-                params = JSON.parse(document.getElementById('params').value || '{}');
-            } catch (e) {
-                alert('Invalid JSON in params');
-                return;
-            }
+            // Build headers from UI (array of enabled headers)
+            headers = {};
+            getHeadersArray().forEach(h => {
+                if (h.enabled && h.name) headers[h.name] = h.value;
+            });
+            // Build params from UI
+            params = {};
+            getParamsArray().forEach(p => {
+                if (p.enabled && p.name) params[p.name] = p.value;
+            });
             // Append params to URL
             const paramStr = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
             if (paramStr) {
                 url += (url.includes('?') ? '&' : '?') + paramStr;
             }
+
+            console.log('Sending request', { method, url, headers, body });
             if (["POST","PUT","PATCH"].includes(method)) {
                 try {
                     body = document.getElementById('body').value;
