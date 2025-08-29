@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Request</title>
+
+    <style>
+        .flex-column {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5em;
+        }
+
+        .flex-row {
+            display: flex;
+            flex-direction: row;
+            gap: 0.5em;
+        }
+    </style>
+</head>
+
+<body class="flex-column" style="padding: 1em; width: 100%; box-sizing: border-box;">
+    <div class="flex-row">
+        <label for="method">Method:</label>
+        <select id="method" name="method">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+            <option value="PATCH">PATCH</option>
+            <option value="HEAD">HEAD</option>
+            <option value="OPTIONS">OPTIONS</option>
+        </select>
+        <label for="url">URL:</label>
+    <input type="text" id="url" name="url" placeholder="https://api.example.com/resource" style="width: 100%;" />
+    <button id="send-btn">Send</button>
+    <button id="save-btn" type="button">Save Request</button>
+    </div>
+
+    <!-- Tabs for Headers and Body -->
+    <div class="flex-row" style="margin-top: 1em;">
+        <button id="tab-params" class="tab-btn" style="flex:1;">Params</button>
+        <button id="tab-headers" class="tab-btn" style="flex:1;">Headers</button>
+        <button id="tab-body" class="tab-btn" style="flex:1;">Body</button>
+    </div>
+    <div id="tab-content" style="margin-top: 0.5em;">
+        <div id="headers-panel">
+            <label for="headers">Headers (JSON format):</label>
+            <textarea id="headers" name="headers" rows="5" placeholder='{"Content-Type": "application/json"}'
+                style="width: 100%;"></textarea>
+        </div>
+        <div id="body-panel" style="display:none;">
+            <label for="body">Body (for POST, PUT, PATCH):</label>
+            <textarea id="body" name="body" rows="10" placeholder='{"key": "value"}' style="width: 100%;"></textarea>
+        </div>
+        <div id="params-panel" style="display:none;">
+            <label for="params">Query Parameters (JSON format):</label>
+            <textarea id="params" name="params" rows="5" placeholder='{"key": "value"}' style="width: 100%;"></textarea>
+        </div>
+    </div>
+
+            <div id="response-panel" style="margin-top:1em; display:none;">
+            <h3>Response</h3>
+            <pre id="response-output" style="background:#222;color:#fff;padding:1em;overflow:auto;"></pre>
+        </div>
+
+        <script>
+        const tabHeaders = document.getElementById('tab-headers');
+        const tabBody = document.getElementById('tab-body');
+        const tabParams = document.getElementById('tab-params');
+        const headersPanel = document.getElementById('headers-panel');
+        const bodyPanel = document.getElementById('body-panel');
+        const paramsPanel = document.getElementById('params-panel');
+
+        tabHeaders.onclick = () => {
+            headersPanel.style.display = '';
+            bodyPanel.style.display = 'none';
+            paramsPanel.style.display = 'none';
+            tabHeaders.style.fontWeight = 'bold';
+            tabBody.style.fontWeight = 'normal';
+            tabParams.style.fontWeight = 'normal';
+        };
+        tabBody.onclick = () => {
+            headersPanel.style.display = 'none';
+            bodyPanel.style.display = '';
+            paramsPanel.style.display = 'none';
+            tabHeaders.style.fontWeight = 'normal';
+            tabBody.style.fontWeight = 'bold';
+            tabParams.style.fontWeight = 'normal';
+        };
+        tabParams.onclick = () => {
+            headersPanel.style.display = 'none';
+            bodyPanel.style.display = 'none';
+            paramsPanel.style.display = '';
+            tabHeaders.style.fontWeight = 'normal';
+            tabBody.style.fontWeight = 'normal';
+            tabParams.style.fontWeight = 'bold';
+        };
+        // Default to headers tab
+        tabHeaders.style.fontWeight = 'bold';
+
+        // Save/load requests logic
+        const saveBtn = document.getElementById('save-btn');
+
+        function getRequestData() {
+            return {
+                method: document.getElementById('method').value,
+                url: document.getElementById('url').value,
+                headers: document.getElementById('headers').value,
+                body: document.getElementById('body').value,
+                params: document.getElementById('params').value
+            };
+        }
+
+        function setRequestData(data) {
+            document.getElementById('method').value = data.method || 'GET';
+            document.getElementById('url').value = data.url || '';
+            document.getElementById('headers').value = data.headers || '';
+            document.getElementById('body').value = data.body || '';
+            document.getElementById('params').value = data.params || '';
+        }
+
+
+        // VS Code API messaging
+        const vscodeApi = acquireVsCodeApi ? acquireVsCodeApi() : undefined;
+
+
+        window.addEventListener('message', event => {
+            const msg = event.data;
+            if (msg.type === 'loadRequest' && msg.request) {
+                setRequestData(msg.request);
+            } else {
+                console.warn('Unknown message type', msg);
+            }
+        });
+
+        // Request saved requests from extension on load and notify extension we're ready
+        window.addEventListener('DOMContentLoaded', () => {
+            if (vscodeApi) {
+                vscodeApi.postMessage({ type: 'ready' });
+            }
+        });
+
+        saveBtn.onclick = () => {
+            if (vscodeApi) {
+                vscodeApi.postMessage({ type: 'saveRequest', request: getRequestData() });
+            }
+        };
+
+        // Send request logic
+        document.getElementById('send-btn').onclick = async () => {
+            const method = document.getElementById('method').value;
+            let url = document.getElementById('url').value;
+            let headers = {};
+            let body = undefined;
+            let params = {};
+            try {
+                headers = JSON.parse(document.getElementById('headers').value || '{}');
+            } catch (e) {
+                alert('Invalid JSON in headers');
+                return;
+            }
+            try {
+                params = JSON.parse(document.getElementById('params').value || '{}');
+            } catch (e) {
+                alert('Invalid JSON in params');
+                return;
+            }
+            // Append params to URL
+            const paramStr = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
+            if (paramStr) {
+                url += (url.includes('?') ? '&' : '?') + paramStr;
+            }
+            if (["POST","PUT","PATCH"].includes(method)) {
+                try {
+                    body = document.getElementById('body').value;
+                    if (body) JSON.parse(body); // Validate JSON
+                } catch (e) {
+                    alert('Invalid JSON in body');
+                    return;
+                }
+            }
+            document.getElementById('response-panel').style.display = '';
+            document.getElementById('response-output').textContent = 'Loading...';
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers,
+                    body: (["POST","PUT","PATCH"].includes(method) && body) ? body : undefined
+                });
+                const text = await res.text();
+                let display = `Status: ${res.status} ${res.statusText}\n`;
+                try {
+                    display += JSON.stringify(JSON.parse(text), null, 2);
+                } catch {
+                    display += text;
+                }
+                document.getElementById('response-output').textContent = display;
+            } catch (err) {
+                document.getElementById('response-output').textContent = 'Error: ' + err;
+            }
+        };
+    </script>
+</body>
+
+</html>
