@@ -22,6 +22,28 @@
 </head>
 
 <body class="flex-column" style="padding: 1em; width: 100%; box-sizing: border-box;">
+    <!-- Add a field for request name above the method/url row -->
+    <div class="flex-row">
+        <label for="request-name">Request Name:</label>
+        <input type="text" id="request-name" name="request-name" placeholder="My Request" style="width: 100%;" />
+    </div>
+
+        <div class="flex-row" style="margin-bottom: 0.5em;">
+                <button id="save-btn" type="button">Save Request</button>
+                <button id="delete-btn" type="button" style="margin-left: 0.5em;">Delete Request</button>
+        </div>
+
+        <!-- Custom modal for delete confirmation -->
+        <div id="delete-modal" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:1000; align-items:center; justify-content:center;">
+            <div style="background:#fff; padding:2em; border-radius:8px; box-shadow:0 2px 8px #0008; min-width:300px; max-width:90vw; margin:auto;">
+                <div style="margin-bottom:1em;">Are you sure you want to delete this request?</div>
+                <div style="display:flex; gap:1em; justify-content:flex-end;">
+                    <button id="delete-cancel-btn" type="button">Cancel</button>
+                    <button id="delete-confirm-btn" type="button" style="background:#c00;color:#fff;">Delete</button>
+                </div>
+            </div>
+        </div>
+
     <div class="flex-row">
         <label for="method">Method:</label>
         <select id="method" name="method">
@@ -34,10 +56,11 @@
             <option value="OPTIONS">OPTIONS</option>
         </select>
         <label for="url">URL:</label>
-    <input type="text" id="url" name="url" placeholder="https://api.example.com/resource" style="width: 100%;" />
-    <button id="send-btn">Send</button>
-    <button id="save-btn" type="button">Save Request</button>
+        <input type="text" id="url" name="url" placeholder="https://api.example.com/resource" style="width: 100%;" />
+        <button id="send-btn">Send</button>
     </div>
+
+    
 
     <!-- Tabs for Headers and Body -->
     <div class="flex-row" style="margin-top: 1em;">
@@ -177,6 +200,8 @@
         // ---
         function getRequestData() {
             return {
+                id: window.currentRequestId || undefined,
+                name: document.getElementById('request-name').value,
                 method: document.getElementById('method').value,
                 url: document.getElementById('url').value,
                 headers: JSON.stringify(getHeadersArray()),
@@ -186,6 +211,8 @@
         }
 
         function setRequestData(data) {
+            window.currentRequestId = data.id || undefined;
+            document.getElementById('request-name').value = data.name || '';
             document.getElementById('method').value = data.method || 'GET';
             document.getElementById('url').value = data.url || '';
             try {
@@ -230,6 +257,29 @@
                 vscodeApi.postMessage({ type: 'saveRequest', request: getRequestData() });
             }
         };
+
+        // Delete button logic with custom modal
+        const deleteBtn = document.getElementById('delete-btn');
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteCancelBtn = document.getElementById('delete-cancel-btn');
+        const deleteConfirmBtn = document.getElementById('delete-confirm-btn');
+
+        deleteBtn.onclick = () => {
+            if (window.currentRequestId && vscodeApi) {
+                deleteModal.style.display = 'flex';
+            }
+        };
+        deleteCancelBtn.onclick = () => {
+            deleteModal.style.display = 'none';
+        };
+        deleteConfirmBtn.onclick = () => {
+            deleteModal.style.display = 'none';
+            if (window.currentRequestId && vscodeApi) {
+                vscodeApi.postMessage({ type: 'deleteRequest', id: window.currentRequestId });
+                vscodeApi.postMessage({ type: 'closePanel' });
+            }
+        };
+
 
         // Send request logic
         document.getElementById('send-btn').onclick = async () => {

@@ -18,6 +18,11 @@
         "command": "basic-client.newRequest",
         "title": "New Request",
         "category": "Basic Client"
+      },
+      {
+        "command": "basic-client.clearAll",
+        "title": "Clear All Saved Requests (TEMP)",
+        "category": "Basic Client"
       }
     ],
     "viewsContainers": {

@@ -8,6 +8,14 @@ import * as path from 'path';
 // Your extension is activated the very first time the command is executed
 
 export function activate(context: vscode.ExtensionContext) {
+	// TEMP: Command to clear all saved requests
+	const clearAllDisposable = vscode.commands.registerCommand('basic-client.clearAll', async () => {
+		await context.globalState.update('basicClientSavedRequests', []);
+		vscode.window.showInformationMessage('All saved requests cleared.');
+		treeDataProvider.refresh();
+	});
+	context.subscriptions.push(clearAllDisposable);
+
 	console.log('Congratulations, your extension "basic-client" is now active!');
 
 	const treeDataProvider = new BasicClientTreeDataProvider(context);
@@ -29,12 +37,32 @@ export function activate(context: vscode.ExtensionContext) {
 		panel.webview.onDidReceiveMessage(async (msg) => {
 			if (msg.type === 'saveRequest' && msg.request) {
 				const arr = context.globalState.get<any[]>('basicClientSavedRequests') || [];
-				arr.push(msg.request);
+				// Assign a unique id if not present
+				if (!msg.request.id) {
+					msg.request.id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+				}
+				// Find by id
+				const idx = arr.findIndex(r => r.id === msg.request.id);
+				if (idx >= 0) {
+					arr[idx] = { ...msg.request };
+				} else {
+					arr.push(msg.request);
+				}
 				await context.globalState.update('basicClientSavedRequests', arr);
+				treeDataProvider.refresh();
+			} else if (msg.type === 'deleteRequest' && msg.id) {
+				let arr = context.globalState.get<any[]>('basicClientSavedRequests') || [];
+				arr = arr.filter(r => r.id !== msg.id);
+				await context.globalState.update('basicClientSavedRequests', arr);
+				treeDataProvider.refresh();
+			} else if (msg.type === 'clearAllRequests') {
+				await context.globalState.update('basicClientSavedRequests', []);
 				treeDataProvider.refresh();
 			} else if (msg.type === 'getRequests') {
 				const arr = context.globalState.get<any[]>('basicClientSavedRequests') || [];
 				panel.webview.postMessage({ type: 'savedRequests', requests: arr });
+			} else if (msg.type === 'closePanel') {
+				panel.dispose();
 			}
 		});
 
@@ -87,9 +115,10 @@ class BasicClientTreeDataProvider implements vscode.TreeDataProvider<vscode.Tree
 			// Load saved requests from globalState
 			const arr = this.context.globalState.get<any[]>('basicClientSavedRequests') || [];
 			const savedItems = arr.map((req, idx) => {
-				const label = `${req.method || 'GET'} ${req.url || ''}`;
+				const label = req.name && req.name.trim() ? req.name : `${req.method || 'GET'} ${req.url || ''}`;
+				const description = req.name && req.name.trim() ? `${req.method || 'GET'} ${req.url || ''}` : '';
 				const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-				item.description = req.url;
+				item.description = description;
 				item.command = {
 					command: 'basic-client.newRequest',
 					title: 'Open Request',
