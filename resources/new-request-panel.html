@@ -28,21 +28,17 @@
         <input type="text" id="request-name" name="request-name" placeholder="My Request" style="width: 100%;" />
     </div>
 
-        <div class="flex-row" style="margin-bottom: 0.5em;">
-                <button id="save-btn" type="button">Save Request</button>
-                <button id="delete-btn" type="button" style="margin-left: 0.5em;">Delete Request</button>
-        </div>
+    <div class="flex-row" style="margin-bottom: 0.5em;">
+        <label for="storage-location">Save To:</label>
+        <select id="storage-location">
+            <option value="global">Global (All Projects)</option>
+            <option value="workspace">This Project</option>
+        </select>
+        <button id="save-btn" type="button">Save Request</button>
+        <button id="delete-btn" type="button" style="margin-left: 0.5em;">Delete Request</button>
+    </div>
 
-        <!-- Custom modal for delete confirmation -->
-        <div id="delete-modal" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:1000; align-items:center; justify-content:center;">
-            <div style="background:#fff; padding:2em; border-radius:8px; box-shadow:0 2px 8px #0008; min-width:300px; max-width:90vw; margin:auto;">
-                <div style="margin-bottom:1em;">Are you sure you want to delete this request?</div>
-                <div style="display:flex; gap:1em; justify-content:flex-end;">
-                    <button id="delete-cancel-btn" type="button">Cancel</button>
-                    <button id="delete-confirm-btn" type="button" style="background:#c00;color:#fff;">Delete</button>
-                </div>
-            </div>
-        </div>
+
 
     <div class="flex-row">
         <label for="method">Method:</label>
@@ -60,7 +56,7 @@
         <button id="send-btn">Send</button>
     </div>
 
-    
+
 
     <!-- Tabs for Headers and Body -->
     <div class="flex-row" style="margin-top: 1em;">
@@ -85,12 +81,25 @@
         </div>
     </div>
 
-            <div id="response-panel" style="margin-top:1em; display:none;">
-            <h3>Response</h3>
-            <pre id="response-output" style="background:#222;color:#fff;padding:1em;overflow:auto;"></pre>
-        </div>
+    <div id="response-panel" style="margin-top:1em; display:none;">
+        <h3>Response</h3>
+        <pre id="response-output" style="background:#222;color:#fff;padding:1em;overflow:auto;"></pre>
+    </div>
 
-        <script>
+    <!-- Custom modal for delete confirmation -->
+    <div id="delete-modal"
+        style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.3); z-index:1000; align-items:center; justify-content:center;">
+        <div
+            style="background:#fff; padding:2em; border-radius:8px; box-shadow:0 2px 8px #0008; min-width:300px; max-width:90vw; margin:auto;">
+            <div style="margin-bottom:1em;">Are you sure you want to delete this request?</div>
+            <div style="display:flex; gap:1em; justify-content:flex-end;">
+                <button id="delete-cancel-btn" type="button">Cancel</button>
+                <button id="delete-confirm-btn" type="button" style="background:#c00;color:#fff;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
         const tabHeaders = document.getElementById('tab-headers');
         const tabBody = document.getElementById('tab-body');
         const tabParams = document.getElementById('tab-params');
@@ -206,11 +215,13 @@
                 url: document.getElementById('url').value,
                 headers: JSON.stringify(getHeadersArray()),
                 body: document.getElementById('body').value,
-                params: JSON.stringify(getParamsArray())
+                params: JSON.stringify(getParamsArray()),
+                storage: document.getElementById('storage-location').value // <-- add this line
             };
         }
 
         function setRequestData(data) {
+            console.log('Loading request data into form', data);
             window.currentRequestId = data.id || undefined;
             document.getElementById('request-name').value = data.name || '';
             document.getElementById('method').value = data.method || 'GET';
@@ -226,6 +237,12 @@
             } catch {
                 setParamsArray([]);
             }
+            // Set storage location if present
+            if (data.storage) {
+                document.getElementById('storage-location').value = data.storage;
+            } else {
+                document.getElementById('storage-location').value = 'global';
+            }
         }
 
 
@@ -234,6 +251,7 @@
 
 
         window.addEventListener('message', event => {
+            console.log('Received message from extension', event.data);
             const msg = event.data;
             if (msg.type === 'loadRequest' && msg.request) {
                 setRequestData(msg.request);
@@ -305,7 +323,7 @@
             }
 
             console.log('Sending request', { method, url, headers, body });
-            if (["POST","PUT","PATCH"].includes(method)) {
+            if (["POST", "PUT", "PATCH"].includes(method)) {
                 try {
                     body = document.getElementById('body').value;
                     if (body) JSON.parse(body); // Validate JSON
@@ -320,7 +338,7 @@
                 const res = await fetch(url, {
                     method,
                     headers,
-                    body: (["POST","PUT","PATCH"].includes(method) && body) ? body : undefined
+                    body: (["POST", "PUT", "PATCH"].includes(method) && body) ? body : undefined
                 });
                 const text = await res.text();
                 let display = `Status: ${res.status} ${res.statusText}\n`;
