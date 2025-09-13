@@ -81,9 +81,26 @@
         </div>
     </div>
 
-    <div id="response-panel" style="margin-top:1em; display:none;">
+    <!--div id="response-panel" style="margin-top:1em; display:none;">
         <h3>Response</h3>
         <pre id="response-output" style="background:#222;color:#fff;padding:1em;overflow:auto;"></pre>
+    </div-->
+    <div id="response-section" style="margin-top:2em;">
+        <div id="response-status" style="margin-bottom:0.5em; font-weight:bold;"></div>
+        <h3>Response Headers</h3>
+        <table id="response-headers-table" style="width:100%; border-collapse:collapse; background:#f5f5f5; border-radius:4px; max-height:150px; overflow:auto;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:4px; border-bottom:1px solid #ccc;">Header</th>
+                    <th style="text-align:left; padding:4px; border-bottom:1px solid #ccc;">Value</th>
+                </tr>
+            </thead>
+            <tbody id="response-headers-tbody">
+                <!-- Headers will be populated here -->
+            </tbody>
+        </table>
+        <h3>Response Body</h3>
+        <pre id="response-body" style="background:#f5f5f5; padding:0.5em; border-radius:4px; max-height:300px; overflow:auto;"></pre>
     </div>
 
     <!-- Custom modal for delete confirmation -->
@@ -332,7 +349,7 @@
                     return;
                 }
             }
-            document.getElementById('response-panel').style.display = '';
+            /*document.getElementById('response-panel').style.display = '';
             document.getElementById('response-output').textContent = 'Loading...';
             try {
                 const res = await fetch(url, {
@@ -350,6 +367,51 @@
                 document.getElementById('response-output').textContent = display;
             } catch (err) {
                 document.getElementById('response-output').textContent = 'Error: ' + err;
+            }*/
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers,
+                    body: (["POST", "PUT", "PATCH"].includes(method) && body) ? body : undefined
+                });
+                const statusDiv = document.getElementById('response-status');
+                statusDiv.textContent = `Status: ${response.status} ${response.statusText}`;
+                // Get response headers as an object
+                const headersObj = {};
+                response.headers.forEach((value, key) => {
+                    headersObj[key] = value;
+                });
+                // Display headers
+                const tbody = document.getElementById('response-headers-tbody');
+                tbody.innerHTML = '';
+                const keys = Object.keys(headersObj);
+                if (keys.length === 0) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="2" style="padding:4px; color:#888;">No headers</td>`;
+                    tbody.appendChild(row);
+                    return;
+                }
+                keys.forEach(key => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-family:monospace;">${key}</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-family:monospace;">${headersObj[key]}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                // Display body
+                const contentType = response.headers.get('content-type') || '';
+                let bodyText;
+                if (contentType.includes('application/json')) {
+                    bodyText = JSON.stringify(await response.json(), null, 2);
+                } else {
+                    bodyText = await response.text();
+                }
+                document.getElementById('response-body').textContent = bodyText;
+            } catch (err) {
+                document.getElementById('response-headers').textContent = '';
+                document.getElementById('response-body').textContent = 'Error: ' + err.message;
             }
         };
     </script>
